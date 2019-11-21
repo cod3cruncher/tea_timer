@@ -18,11 +18,6 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define ADDR_LOWER 0
 #define ADDR_UPPER 1
 
-/*** STATES ***/
-#define IDLE_STATE 1
-#define CALIBRATE_LOWER_STATE 21
-#define CALIBRATE_UPPER_STATE 22
-#define BREWING_STATE 3
 
 #define MIN_POT 0
 #define MAX_POT 1023
@@ -50,6 +45,13 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 #define DISPLAY_BRIGHTNESS 1
 
+enum mode {
+	IDLE,
+	CALIBRATE_LOWER,
+	CALIBRATE_UPPER,
+	BREWING
+};
+
 
 
 Servo myservo;
@@ -69,7 +71,7 @@ Bounce debouncerStart = Bounce();
 Bounce debouncerCalibrate = Bounce();
 Bounce debouncerUpDown = Bounce();
 
-short state;
+mode currMode;
 
 void setup() {
   lcd.begin();
@@ -93,7 +95,7 @@ void setup() {
   debouncerUpDown.interval(5);
 
 
-  state = IDLE_STATE;
+  currMode = IDLE;
 
   delay(100);
   //  armUp();
@@ -117,11 +119,11 @@ void loop() {
 
   //   the calibration mode
   if (isCalibrationBtnClicked()) {
-    switch (state) {
-      case CALIBRATE_LOWER_STATE:
+    switch (currMode) {
+      case CALIBRATE_LOWER:
         Serial.print("Lower Bound calibrated: ");
         Serial.println(angleLowerBound);
-        state = CALIBRATE_UPPER_STATE;
+        currMode = CALIBRATE_UPPER;
         //        myservo.write(EEPROM.read(ADDR_UPPER));
         delay(100);
         lcd.clear();
@@ -130,7 +132,7 @@ void loop() {
         lcd.setCursor(0, 1);
         lcd.print("einstellen");
         break;
-      case CALIBRATE_UPPER_STATE:
+      case CALIBRATE_UPPER:
         Serial.print("Upper Bound calibrated: ");
         Serial.println(angleUpperBound);
         Serial.println("Calibration finished");
@@ -147,10 +149,10 @@ void loop() {
         lcd.print("beendet");
         delay(2000);
         lcd.clear();
-        state = IDLE_STATE;
+        currMode = IDLE;
         break;
-      case IDLE_STATE:
-        state = CALIBRATE_LOWER_STATE;
+      case IDLE:
+        currMode = CALIBRATE_LOWER;
         //        myservo.write(EEPROM.read(ADDR_LOWER));
         lcd.clear();
         lcd.setCursor(0, 0);
@@ -162,14 +164,14 @@ void loop() {
     }
   }
   int servoAngle = getCalibrationServoAngle();
-  switch (state) {
-    case CALIBRATE_LOWER_STATE:
+  switch (currMode) {
+    case CALIBRATE_LOWER:
       angleLowerBound = servoAngle;
       myservo.write(servoAngle);
       //      Serial.print("Setting Lower Bound: ");
       //      Serial.println(servoAngle);
       break;
-    case CALIBRATE_UPPER_STATE:
+    case CALIBRATE_UPPER:
       angleUpperBound = servoAngle;
       myservo.write(servoAngle);
       //      Serial.print("Setting Upper Bound: ");
@@ -178,14 +180,14 @@ void loop() {
   }
   delay(10);
   int brewingTime = getBrewingTime();
-  if (state == IDLE_STATE) {
+  if (currMode == IDLE) {
     writeTimeToDisplay("Ziehzeit", brewingTime, 0);
     if (isStartBtnClicked()) {
-      state = BREWING_STATE;
+		currMode = BREWING;
     }
     delay(20);
   }
-  if (state == BREWING_STATE) {
+  if (currMode == BREWING) {
     Serial.println("Timer started");
     armDown();
     for (int i = brewingTime; i > 0; i--) {
@@ -309,7 +311,7 @@ void showTimeDisplay(int minutes, int seconds) {
 
 void finished() {
   Serial.println("Brewing finished!");
-  state = IDLE_STATE;
+  currMode = IDLE;
   makeSound();
 }
 
